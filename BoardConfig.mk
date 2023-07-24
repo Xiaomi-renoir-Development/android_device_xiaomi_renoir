@@ -9,6 +9,9 @@ DEVICE_PATH := device/xiaomi/renoir
 # Inherit from sm8350-common
 include device/xiaomi/sm8350-common/BoardConfigCommon.mk
 
+# Assert
+TARGET_OTA_ASSERT_DEVICE := renoir,renoir_global,renoir_jp,renoir_ru,renoir_eea_global
+
 # Board
 TARGET_BOOTLOADER_BOARD_NAME := renoir
 
