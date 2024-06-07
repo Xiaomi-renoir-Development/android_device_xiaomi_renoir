@@ -18,8 +18,9 @@ cc_library_static {
     name: "libinit_renoir",
     srcs: ["init_renoir.cpp"],
     recovery_available: true,
+    whole_static_libs: ["libbase"],
     include_dirs: [
-        "system/core/init",
-    ],
-    shared_libs: ["libbase"],
+        "system/libbase/include",
+        "system/core/init"
+    ]
 }

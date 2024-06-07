@@ -1,5 +1,9 @@
 /*
-   Copyright (C) 2020 The LineageOS Project.
+   Copyright (c) 2015, The Linux Foundation. All rights reserved.
+   Copyright (C) 2016 The CyanogenMod Project.
+   Copyright (C) 2019-2020 The LineageOS Project.
+   Copyright (C) 2021 The Android Open Source Project.
+   Copyright (C) 2022-2023 Paranoid Android.
 
    Redistribution and use in source and binary forms, with or without
    modification, are permitted provided that the following conditions are
@@ -13,7 +17,6 @@
     * Neither the name of The Linux Foundation nor the names of its
       contributors may be used to endorse or promote products derived
       from this software without specific prior written permission.
-
    THIS SOFTWARE IS PROVIDED "AS IS" AND ANY EXPRESS OR IMPLIED
    WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
    MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NON-INFRINGEMENT
@@ -27,58 +30,64 @@
    IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include <fstream>
-#include <unistd.h>
+#include <cstdlib>
+#include <string.h>
 
-#include <android-base/properties.h>
 #define _REALLY_INCLUDE_SYS__SYSTEM_PROPERTIES_H_
 #include <sys/_system_properties.h>
+#include <android-base/properties.h>
 
 #include "property_service.h"
 #include "vendor_init.h"
 
 using android::base::GetProperty;
-using android::init::property_set;
+using std::string;
 
+// list of partitions to override props
+static const string source_partitions[] = {
+    "", "bootimage.", "odm.", "product.",
+    "system.", "system_ext.", "vendor."
+};
 
-void property_override(char const prop[], char const value[])
-{
-    prop_info *pi;
-    pi = (prop_info*) __system_property_find(prop);
-    if (pi)
+void property_override(char const prop[], char const value[]) {
+    auto pi = (prop_info*) __system_property_find(prop);
+
+    if (pi != nullptr)
         __system_property_update(pi, value, strlen(value));
     else
         __system_property_add(prop, strlen(prop), value, strlen(value));
 }
-void property_override_dual(char const system_prop[],
-    char const vendor_prop[], char const value[])
-{
-    property_override(system_prop, value);
-    property_override(vendor_prop, value);
+
+void set_ro_build_prop(const string &prop, const string &value) {
+    string prop_name;
+
+    for (const string &source : source_partitions) {
+        prop_name = "ro.product." + source + prop;
+        property_override(prop_name.c_str(), value.c_str());
+    }
+}
+
+void set_device_props(const string model, const string name, const string marketname) {
+    set_ro_build_prop("model", model);
+    set_ro_build_prop("name", name);
+    set_ro_build_prop("marketname", marketname);
+
+    property_override("bluetooth.device.default_name", marketname.c_str());
+    property_override("vendor.usb.product_string", marketname.c_str());
 }
 
 void vendor_load_properties() {
-    std::string region;
-    region = GetProperty("ro.boot.hwc", "GLOBAL");
+    // Detect variant and override properties
+    string region = GetProperty("ro.boot.hwc", "");
 
-    if (region == "GLOBAL") {
-        property_override_dual("ro.product.model", "ro.vendor.product.model", "M2101K9G");
-        property_override_dual("ro.product.device", "ro.product.vendor.device", "renoir");
-        property_override_dual("ro.build.fingerprint", "ro.vendor.build.fingerprint", "Xiaomi/renoir_eea/renoir:11/RKQ1.201112.002/V12.5.6.0.RKIEUXM:user/release-keys");
-        property_override("ro.build.description", "renoir_eea-user 11 RKQ1.201112.002 V12.5.6.0.RKIEUXM release-keys");
-        property_override("ro.product.mod_device", "renoir_eea_global");
-    } else if (region == "JP") {
-            property_override_dual("ro.product.model", "ro.vendor.product.model", "M2101K9R");
-            property_override_dual("ro.product.device", "ro.product.vendor.device",  "renoir");
-            property_override_dual("ro.build.fingerprint", "ro.vendor.build.fingerprint", "Xiaomi/renoir_jp/renoir:11/RKQ1.201112.002/V12.5.4.0.RKIJPXM:user/release-keys");
-            property_override("ro.build.description", "renoir-user 11 RKQ1.201112.002 V12.5.4.0.RKIJPXM release-keys");
-            property_override("ro.product.mod_device", "renoir_jp_global");
-            } else {
-                property_override_dual("ro.product.model", "ro.vendor.product.model", "M2101K9G");
-                property_override_dual("ro.product.device", "ro.product.vendor.device",  "renoir");
-                property_override_dual("ro.build.fingerprint", "ro.vendor.build.fingerprint", "Xiaomi/renoir/renoir:11/RKQ1.201112.002/V12.5.5.0.RKIMIXM:user/release-keys");
-                property_override("ro.build.description", "renoir-user 11 RKQ1.201112.002 V12.5.5.0.RKIMIXM release-keys");
-                property_override("ro.product.mod_device", "renoir_global");
-            }
+    if (region == "CN") { // China
+        set_device_props("M2101K9C", "renoir", "Mi 11 Lite 5G");
+    } else if (region == "JP") { // Japan
+        set_device_props("M2101K9R", "renoir_jp", "Mi 11 Lite 5G");
+    } else { // Global
+        set_device_props("M2101K9G", "renoir_global", "Mi 11 Lite 5G");
     }
+
+    // Set hardware revision
+    property_override("ro.boot.hardware.revision", GetProperty("ro.boot.hwversion", "").c_str());
 }
